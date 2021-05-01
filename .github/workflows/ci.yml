@@ -50,10 +50,12 @@ jobs:
     needs: [test]
     runs-on: ubuntu-latest
     steps:
-
       - uses: actions/checkout@v2
+
       - name: Run semantic-release
-        uses: go-semantic-release/action@v1
-        if: github.repository == 'casbin/gorm-adapter' && github.event_name == 'push'
-        with:
-          github-token: ${{ secrets.GH_TOKEN }} 
+        if: github.event_name == 'push'
+        run: |
+          npm install --save-dev semantic-release@17.2.4
+          npx semantic-release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
