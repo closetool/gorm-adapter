@@ -294,6 +294,51 @@ func testFilteredPolicy(t *testing.T, a *Adapter) {
 	testGetPolicy(t, e, [][]string{{"alice", "data1", "read"}, {"bob", "data2", "write"}})
 }
 
+func testFilteredPolicyWithDomain(t *testing.T, a *Adapter) {
+	e, _ := casbin.NewEnforcer("examples/rbac_model.conf", "examples/rbac_policy.csv")
+
+	e.SetAdapter(a)
+
+	assert.NoError(t, e.SavePolicy())
+
+	testEnforce := func(expected bool, vals ...interface{}) {
+		ok, err := e.Enforce(vals...)
+		assert.NoError(t, err)
+
+		if ok != expected {
+			t.Errorf("%v, expected %v, but got: %v", vals, expected, ok)
+		}
+	}
+
+	_, err := e.DeleteRolesForUser("alice")
+	assert.NoError(t, err)
+	assert.NoError(t, e.LoadPolicy())
+
+	_, err = e.AddRolesForUser("admin", []string{"alice", "bob"})
+	assert.NoError(t, err)
+	assert.NoError(t, e.LoadPolicy())
+
+	testEnforce(true, "admin", "data1", "read")
+	testEnforce(true, "admin", "data2", "write")
+	testEnforce(false, "admin", "data2", "read")
+
+	_, err = e.DeleteRolesForUser("admin")
+	assert.NoError(t, err)
+	assert.NoError(t, e.LoadPolicy())
+
+	testEnforce(false, "admin", "data1", "read")
+	testEnforce(false, "admin", "data2", "write")
+	testEnforce(false, "admin", "data2", "read")
+
+	_, err = e.AddRolesForUser("admin", []string{"alice", "bob", "data2_admin"})
+	assert.NoError(t, err)
+	assert.NoError(t, e.LoadPolicy())
+
+	testEnforce(true, "admin", "data1", "read")
+	testEnforce(true, "admin", "data2", "write")
+	testEnforce(true, "admin", "data2", "read")
+}
+
 func testUpdatePolicy(t *testing.T, a *Adapter) {
 	// NewEnforcer() will load the policy automatically.
 	e, _ := casbin.NewEnforcer("examples/rbac_model.conf", a)
@@ -428,6 +473,9 @@ func TestAdapters(t *testing.T) {
 	a = initAdapterWithGormInstance(t, db)
 	testFilteredPolicy(t, a)
 
+	a = initAdapterWithGormInstance(t, db)
+	testFilteredPolicyWithDomain(t, a)
+
 	db, err = gorm.Open(postgres.Open("user=postgres password=postgres host=127.0.0.1 port=5432 sslmode=disable dbname=casbin"), &gorm.Config{})
 	if err != nil {
 		panic(err)
@@ -438,6 +486,9 @@ func TestAdapters(t *testing.T) {
 
 	a = initAdapterWithGormInstance(t, db)
 	testFilteredPolicy(t, a)
+
+	a = initAdapterWithGormInstance(t, db)
+	testFilteredPolicyWithDomain(t, a)
 
 	//db, err = gorm.Open(sqlite.Open("casbin.db"), &gorm.Config{})
 	//if err != nil {
